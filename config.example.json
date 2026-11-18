@@ -1,0 +1,15 @@
+{
+  "deployment": {
+    "stage": "{{ op://$OP_DEMO_VAULT/enterprise-orders-$APP_ENV/deployment/stage }}"
+  },
+  "database": {
+    "dsn": "{{ op://$OP_DEMO_VAULT/enterprise-orders-$APP_ENV/database/dsn }}"
+  },
+  "observability": {
+    "sentry_dsn": "{{ op://$OP_DEMO_VAULT/enterprise-orders-$APP_ENV/observability/sentry_dsn }}"
+  },
+  "integrations": {
+    "slack_bot_token": "{{ op://$OP_DEMO_VAULT/enterprise-orders-$APP_ENV/integrations/slack_bot_token }}",
+    "google_maps_api_key": "{{ op://$OP_DEMO_VAULT/enterprise-orders-$APP_ENV/integrations/google_maps_api_key }}"
+  }
+}
