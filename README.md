@@ -1,98 +1,42 @@
-# Enterprise secrets with 1Password CLI
+# 1Password CLI Secrets Demo
 
-A small order service needs a different set of credentials in `test`, `dev`,
-`staging`, and `prod`. Each stage has the same four inputs:
+Keep your team's development secrets in a shared **1Password Environment**.
+Each developer signs in with their own 1Password account and starts the app
+with `op run`.
 
-| Variable | What the service uses it for |
-| --- | --- |
-| `DATABASE_DSN` | PostgreSQL connection URL containing the username and password |
-| `SENTRY_DSN` | Sentry ingest destination for the stage's project |
-| `SLACK_BOT_TOKEN` | Bearer token for the order notifications bot |
-| `GOOGLE_MAPS_API_KEY` | API key for calculating delivery routes |
+The demo is a small Python order service that checks synthetic credentials for
+PostgreSQL, Sentry, Slack, and Google Maps. It prints a startup summary and
+makes no network connections. If your team uses 1Password vault items or needs
+a configuration file, see the [`.env` and JSON examples](#vault-backed-env-and-json-examples).
 
-Each bundle also has `CONFIG_STAGE`, a nonsecret label. The app checks this
-against the stage you requested before it prepares any requests. A Sentry DSN
-identifies the ingest destination and is distinct from a
-[Sentry API token](https://docs.sentry.io/api/auth/).
+## Why use this setup
 
-The `prod` database fixture has this shape:
+AI coding agents can read plaintext `.env` files even when Git ignores them.
+With `op run`, the app gets its secrets from 1Password as environment variables
+at launch, so developers can run it without a plaintext secrets file. App logs
+and debug output can still expose those values, so keep credentials out of logs
+and use synthetic values when working with agents.
 
-```dotenv
-DATABASE_DSN=postgres://<username>:<password>@my-prod-host.us-east-2.rds.amazonaws.com:5432/data
-```
+## Run the demo locally
 
-The generator gives each stage synthetic values and percent-encodes reserved
-characters in the database password. The app checks both DSN formats and
-constructs Slack and Google Maps requests in memory. It opens no database or
-network connections. It prints field names for configuration errors and never
-logs the values, request headers, or parsed DSNs.
+1. From the repository root, use Bash or Zsh with Python 3.10+ and
+   [1Password CLI](https://www.1password.dev/cli/get-started) 2.41+.
+   Check with `python3 --version` and `op --version`. The demo uses only the
+   Python standard library.
+2. Open and unlock the 1Password desktop app with your team account. Under
+   **Settings → Developer**, enable **Integrate with 1Password CLI**.
+   [Desktop app integration](https://www.1password.dev/cli/app-integration)
+3. Get the ID for `enterprise-orders-dev` from your teammate, or find it under
+   **Developer → View Environments**, open the Environment, and choose
+   **Manage environment → Copy environment ID**. If your team hasn't set up
+   the demo yet, follow [the one-time setup](#set-up-the-shared-demo-environment).
 
-## Prerequisites
-
-Run the commands from the `op-cli-demo` directory in Bash or Zsh. You need
-Python 3.10 or newer and [1Password CLI](https://www.1password.dev/cli/get-started)
-2.42 or newer for this walkthrough. There are no Python dependencies to install.
-
-```sh
-python3 --version
-op --version
-```
-
-Sign in to the 1Password desktop app and unlock it. On macOS, enable
-**Settings → Developer → Integrate with 1Password CLI**, then run
-`op vault list` and approve the desktop prompt to authorize your terminal.
-
-## Option A: 1Password Environments
-
-Start here if you want 1Password to supply environment variables directly to the
-app. Create and populate each Environment in the desktop app, then pass its ID
-to `op run`. The `.env.example` and JSON templates belong to Option B.
-
-### 1. Create the dev Environment
-
-In the 1Password desktop app, open **Developer → View Environments → New
-environment**. Name it `enterprise-orders-dev`, choose the appropriate account
-if prompted, and select **Save**. If **View Environments** is missing on a
-managed account, ask your 1Password administrator to check the
-[Environments policy](https://www.1password.dev/environments#turn-the-environments-policy-on-or-off).
-
-### 2. Import synthetic values
-
-Run this in your terminal. It creates a private temporary file with the four
-synthetic values and `CONFIG_STAGE=dev` and prints where to find it.
+Paste the ID below and approve the desktop prompt if it appears.
 
 ```sh
-stage=dev
-if import_dir=$(mktemp -d); then
-  import_file="$import_dir/enterprise-orders-$stage.env"
-  (umask 077; python3 seed_demo.py "$stage" --format dotenv > "$import_file") &&
-    printf 'Open folder: %s\nSelect file: %s\n' "$import_dir" "${import_file##*/}"
-fi
+environment_id='PASTE_DEV_ENVIRONMENT_ID'
+op run --environment "$environment_id" -- python3 app.py --stage dev
 ```
-
-Open `enterprise-orders-dev` and select **Import .env file**. On macOS, press
-**⌘⇧G** in the file picker, paste the printed folder path, and select
-`enterprise-orders-dev.env`. After importing, check that the four names from the
-table above and `CONFIG_STAGE` appear in the Environment. You can also enter
-the values individually with **New secret**.
-Once the import is complete, remove the temporary file from the same terminal:
-
-```sh
-rm -f "$import_file" && rmdir "$import_dir"
-```
-
-### 3. Copy the ID and run the demo
-
-In `enterprise-orders-dev`, select **Manage environment → Copy environment ID**.
-Replace `PASTE_DEV_ENVIRONMENT_ID` below with the copied ID. Approve the 1Password
-prompt if one appears.
-
-```sh
-dev_environment_id='PASTE_DEV_ENVIRONMENT_ID'
-op run --environment "$dev_environment_id" -- python3 app.py --stage dev
-```
-
-Expected output:
 
 ```text
 Stage: DEV
@@ -101,150 +45,108 @@ Slack and Google Maps: credential headers prepared
 No connections opened or credentials logged.
 ```
 
-The Environment ID tells `op` which values to inject. The demo's `--stage`
-argument tells Python which `CONFIG_STAGE` to expect. `op run` supplies the
-values to the launched process, where the app reads them with `os.environ`.
-[Run command reference](https://www.1password.dev/cli/reference/commands/run)
+The Environment ID selects what 1Password supplies. Everything after `--` is
+the command to launch. The demo reads the values with `os.environ` and compares
+`--stage dev` to the `CONFIG_STAGE` value to catch a mix-up.
+[1Password CLI reference](https://www.1password.dev/cli/reference/commands/run)
 
-### 4. Switch stages
+## Set up the shared demo Environment
 
-Repeat steps 1 and 2 for `test`, `staging`, or `prod`. Use the matching name
-(`enterprise-orders-staging`, for example) and change `stage` in the import
-command so the file contains values for that stage. Copy the new Environment's
-ID and pass the matching `--stage`:
+One teammate with permission to create and share Environments sets this up
+in the team's 1Password account. For a solo trial, create the Environment in
+an account you can use and skip step 3.
 
-```sh
-staging_environment_id='PASTE_STAGING_ENVIRONMENT_ID'
-op run --environment "$staging_environment_id" -- python3 app.py --stage staging
-```
-
-The first line should be `Stage: STAGING`. Passing `--stage dev` with that same
-ID should report a stage mismatch before the app prepares requests. The stage
-check catches a configuration mistake. Environment permissions control who can
-retrieve the values.
-
-### Use this pattern in your own project
-
-1. List the variable names your app already reads, such as `DATABASE_URL` or
-   `SLACK_BOT_TOKEN`. Use those exact names in every Environment. Store the
-   values for each stage in its own Environment. For a database URL, percent
-   encode reserved characters in the username and password before building it.
-2. Keep the app's existing entry point and wrap its usual command with
-   `op run`. For example, set `OP_ENVIRONMENT_ID` to your project's dev
-   Environment ID and launch a Node project with:
+1. In the desktop app, choose **Developer → View Environments → New
+   environment**. Name it `enterprise-orders-dev`, select the team account,
+   and save. If **View Environments** is unavailable, ask a team owner or admin
+   to check the [Environments policy](https://www.1password.dev/environments#turn-the-environments-policy-on-or-off).
+2. Generate a private, temporary `.env` file with synthetic values. The command
+   prints the folder path.
 
    ```sh
-   op run --environment "$OP_ENVIRONMENT_ID" -- npm run dev
+   if import_dir=$(mktemp -d); then
+     import_file="$import_dir/enterprise-orders-dev.env"
+     (umask 077; python3 seed_demo.py dev --format dotenv > "$import_file") &&
+       printf '%s\n' "$import_dir"
+   fi
    ```
 
-   Let injected variables take precedence if your framework also loads a local
-   `.env`. Keep ordinary defaults in your normal project configuration and
-   store live credentials in 1Password.
-3. For CI, configure the Environment ID as a deployment variable and store
-   `OP_SERVICE_ACCOUNT_TOKEN` in the CI provider's secret store. Give each job a
-   [service account scoped to its stage's Environment](https://www.1password.dev/environments/read-environment-variables).
-   Use the same `op run` wrapper around the build, test, or deploy command that
-   needs the credentials. Keep production access out of developer and test jobs.
-4. Rotate a credential in the provider and update the matching value in
-   1Password. The next launch fetches the updated value. Restart any processes
-   that still hold the old value.
+   In `enterprise-orders-dev`, choose **Import .env file** and select
+   `enterprise-orders-dev.env` from that folder. On macOS, press **⌘⇧G** in
+   the file picker and paste the folder path. The imported Environment should
+   contain these five entries.
 
-## Option B: Grouped vault items for `.env` and JSON
+   | Variable | Purpose |
+   | --- | --- |
+   | `CONFIG_STAGE` | Nonsecret stage label, set to `dev` for this run |
+   | `DATABASE_DSN` | PostgreSQL URL containing a username and password |
+   | `SENTRY_DSN` | Sentry project's ingest address |
+   | `SLACK_BOT_TOKEN` | Bot token for order notifications |
+   | `GOOGLE_MAPS_API_KEY` | API key for delivery routes |
 
-This path works with standard vault items. It uses one Secure Note per stage,
-with **deployment**, **database**, **observability**, and **integrations**
-sections. Both config templates reference the same field names. Pick the stage
-with `APP_ENV`.
+   Once the import succeeds, delete the file from the same terminal.
 
-### Seed a demo vault
+   ```sh
+   rm -f "$import_file" && rmdir "$import_dir"
+   ```
 
-Set `OP_DEMO_VAULT` to a vault name or ID. The loop creates only missing demo
-items and leaves existing values in place. The generator writes directly to
-`op item create` over stdin.
+3. In the Environment, choose **Manage environment → Manage access**. In the
+   Admin Console, add your developer group and grant it viewing access. Give
+   editing or managing access to the people who maintain the values and
+   permissions. Copy the Environment ID and share it with the group. The ID
+   identifies the Environment and access still requires each developer's own
+   1Password sign-in.
+   [Share a 1Password Environment](https://www.1password.dev/environments#share-an-environment)
 
-```sh
-export OP_DEMO_VAULT='Private'
+With the ID, return to [the quickstart](#run-the-demo-locally) and launch the app.
+
+To try `test`, `staging`, or `prod`, create another demo Environment and use
+that stage in the generator. Run with the new ID and the matching `--stage`.
+For example, the synthetic `prod` bundle has a database URL shaped like this.
+
+```text
+postgres://<username>:<password>@my-prod-host.us-east-2.rds.amazonaws.com:5432/data
 ```
 
-For a fresh setup, use the following from Bash or Zsh:
+## Use the pattern in your project
 
-```sh
-(
-  set -o pipefail
-  existing=$(op item list --vault "$OP_DEMO_VAULT" --format=json |
-    python3 -c 'import json, sys; print("\n".join(item["title"] for item in json.load(sys.stdin)))') || exit 1
-  for stage in test dev staging prod; do
-    if grep -Fxq -- "enterprise-orders-$stage" <<< "$existing"; then
-      continue
-    fi
-    python3 seed_demo.py "$stage" --format item |
-      op item create --vault "$OP_DEMO_VAULT" - >/dev/null || exit 1
-  done
-)
-```
+1. **Start with the variables your app already reads.** If it expects
+   `DATABASE_URL`, use `DATABASE_URL` in 1Password. Keep the key names consistent
+   across stages and store each stage's values in its own Environment. Keep
+   ordinary defaults in project config. Use development credentials for local
+   work and grant access stage by stage.
+2. **Put `op run` in front of the usual startup command.** For example, in a
+   Node project, replace the placeholder with your project's shared dev
+   Environment ID and run:
 
-Prepare your local templates if they aren't already configured:
+   ```sh
+   environment_id='PASTE_PROJECT_DEV_ENVIRONMENT_ID'
+   op run --environment "$environment_id" -- npm run dev
+   ```
 
-```sh
-cp -n .env.example .env
-cp -n config.example.json config.local.json
-```
+   If your framework also loads a `.env` file, make sure it preserves the
+   injected variables. Keep live values out of Git, shell commands, and local
+   config files. Give teammates the startup command and the Environment ID.
+3. **Update shared values in 1Password.** When a credential rotates, update
+   the Environment and relaunch the app so it receives the new value.
 
-The templates contain references such as
-`op://$OP_DEMO_VAULT/enterprise-orders-$APP_ENV/database/dsn`. If the local
-copies already contain a vault ID, they use that ID instead. For a real
-deployment, use a separate vault for each stage and set `OP_DEMO_VAULT` to the
-appropriate vault at launch. Four items in one demo vault show organization;
-they share the vault's access permissions.
+## Vault-backed `.env` and JSON examples
 
-### Run with `.env`
+![Four Secure Notes in a 1Password vault, with the dev note selected and credentials masked](docs/images/stage-vault-items.png)
 
-```sh
-stage=dev
-APP_ENV="$stage" op run --env-file=.env -- python3 app.py --stage "$stage"
-```
-
-`op run` supplies the values to the Python process. The file stays a reference
-template. See [environment variable injection](https://www.1password.dev/cli/secrets-environment-variables).
-
-### Run with JSON
-
-```sh
-stage=staging
-(
-  set -o pipefail
-  APP_ENV="$stage" op inject --in-file=config.local.json |
-    python3 app.py --stage "$stage" --config -
-)
-```
-
-Keep the pipe connected. `op inject` sends plaintext JSON to stdout, and the
-pipe gives it directly to the app. If a tool needs a physical file, use
-`op inject --out-file` with mode `0600` in a private temporary directory and
-delete the file after the command. The generator's values are safe to insert
-into JSON strings. Arbitrary real values may need JSON escaping. See the
-[config template documentation](https://www.1password.dev/cli/secrets-config-files).
-
-Both vault commands produce the same status output as the native Environment
-commands, with the selected stage on the first line.
+The screenshot shows one Secure Note per stage in a 1Password vault. For this
+setup, `op` resolves references from the `.env` or JSON template. The quickstart
+uses the separate **Developer → View Environments** screen.
+[Try the vault-backed examples](docs/vault-items.md)
 
 ## Troubleshooting
 
 | Symptom | What to check |
 | --- | --- |
-| `unknown flag: --environment` | Run `op --version` and update the CLI on your PATH. |
-| Environment cannot be found or accessed | Copy the ID again from **Manage environment** and check that the signed-in account has access. |
-| `Missing DATABASE_DSN` or another variable | Check the exact variable name and confirm it has a value in the selected Environment. |
-| Unresolved reference in the native Environment path | Populate the Environment using the generated import or enter values in the desktop app. The vault templates in this repo contain references for Option B. |
-| Stage mismatch | Match the stage embedded in the imported file (`CONFIG_STAGE`) to the demo's `--stage` argument. |
+| CLI can't connect to the desktop app | Unlock 1Password, check the CLI integration setting, and retry `op vault list`. On macOS, check **System Settings → General → Login Items & Extensions → App Background Activity** for 1Password, then quit and reopen the app. |
+| `unknown flag: --environment` | Run `op --version` and update the CLI on your `PATH`. |
+| Environment is missing or access is denied | Confirm the ID and ask the maintainer to check your access to that Environment. If you use multiple 1Password accounts, run `op signin` and select the team account. |
+| `Missing DATABASE_DSN` or another variable | Check that the selected Environment has a value under the exact name shown in the error. |
+| Stage mismatch | Use the ID for the stage passed to `--stage`, and check `CONFIG_STAGE` in that Environment. |
 
-If macOS blocks the desktop connection, check **System Settings → General →
-Login Items & Extensions → App Background Activity** for 1Password. Quit and
-reopen the app after allowing it, then retry `op vault list`. See the
-[1Password troubleshooting guide](https://www.1password.dev/cli/app-integration#troubleshooting).
-
-## Notes on handling credentials
-
-Use synthetic values with coding agents. `op run` masks output by default, but
-code receiving a secret can still write it to files, logs, or network requests.
-Keep production vault or Environment access outside development sessions.
+[1Password CLI troubleshooting](https://www.1password.dev/cli/app-integration#troubleshooting)

@@ -8,7 +8,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request
 
-
 STAGES = ("test", "dev", "staging", "prod")
 FIELDS = (
     ("CONFIG_STAGE", "deployment", "stage"),
@@ -54,12 +53,17 @@ def check_dsn(name: str, value: str) -> None:
         if name == "DATABASE_DSN":
             valid = (
                 url.scheme in {"postgres", "postgresql"}
-                and url.username and url.password and url.hostname
-                and url.port and url.path.strip("/")
+                and url.username
+                and url.password
+                and url.hostname
+                and url.port
+                and url.path.strip("/")
             )
         else:
             valid = (
-                url.scheme == "https" and url.username and url.hostname
+                url.scheme == "https"
+                and url.username
+                and url.hostname
                 and url.path.rstrip("/").rsplit("/", 1)[-1].isdigit()
             )
     except ValueError:
@@ -99,13 +103,17 @@ def prepare_requests(config: dict[str, str]) -> tuple[Request, Request]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", required=True, choices=STAGES)
-    parser.add_argument("--config", metavar="PATH", help="Read JSON from PATH or - for stdin.")
+    parser.add_argument(
+        "--config", metavar="PATH", help="Read JSON from PATH or - for stdin."
+    )
     args = parser.parse_args()
 
     try:
         config = load_config(args.config)
         if config["CONFIG_STAGE"] != args.stage:
-            raise ConfigError("Selected stage does not match CONFIG_STAGE in 1Password.")
+            raise ConfigError(
+                "Selected stage does not match CONFIG_STAGE in 1Password."
+            )
         check_dsn("DATABASE_DSN", config["DATABASE_DSN"])
         check_dsn("SENTRY_DSN", config["SENTRY_DSN"])
         prepare_requests(config)
