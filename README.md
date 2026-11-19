@@ -50,6 +50,32 @@ the command to launch. The demo reads the values with `os.environ` and compares
 `--stage dev` to the `CONFIG_STAGE` value to catch a mix-up.
 [1Password CLI reference](https://www.1password.dev/cli/reference/commands/run)
 
+### See console masking in action
+
+Imagine leaving debug prints in `app.py` while checking Slack and PostgreSQL.
+With the same synthetic dev Environment, add `--demo-masking` to turn them on.
+The app sends the demo Slack token to stdout and stderr and the database DSN to
+stdout.
+
+```sh
+op run --environment "$environment_id" -- python3 app.py --stage dev --demo-masking
+```
+
+With default masking, expect these debug lines alongside the startup summary.
+Their order may vary.
+
+```text
+DEBUG stdout: Slack token=<concealed by 1Password>
+DEBUG stderr: Slack token=<concealed by 1Password>
+Database DSN: <concealed by 1Password>
+```
+
+`op run` masks secrets in the console output it captures on a best effort
+basis. An encoded or split value can still slip through. Logs written directly
+to a file or sent directly to a log service bypass this filter. Keep credentials
+out of app logs, including at debug level.
+[1Password CLI reference](https://www.1password.dev/cli/reference/commands/run)
+
 ## Set up the shared demo Environment
 
 One teammate with permission to create and share Environments sets this up

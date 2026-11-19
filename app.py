@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -106,6 +107,11 @@ def main() -> int:
     parser.add_argument(
         "--config", metavar="PATH", help="Read JSON from PATH or - for stdin."
     )
+    parser.add_argument(
+        "--demo-masking",
+        action="store_true",
+        help="Print synthetic dev credentials to show op run masking.",
+    )
     args = parser.parse_args()
 
     try:
@@ -117,6 +123,16 @@ def main() -> int:
         check_dsn("DATABASE_DSN", config["DATABASE_DSN"])
         check_dsn("SENTRY_DSN", config["SENTRY_DSN"])
         prepare_requests(config)
+        if args.demo_masking and (
+            args.stage != "dev"
+            or not re.fullmatch(r"xoxb-demo-dev-[0-9a-f]{32}", config["SLACK_BOT_TOKEN"])
+            or not re.fullmatch(
+                r"postgres://orders_dev:demo-[0-9a-f]{32}%3A%40%2B@"
+                r"my-dev-host\.us-east-2\.rds\.amazonaws\.com:5432/data",
+                config["DATABASE_DSN"],
+            )
+        ):
+            raise ConfigError("Use the synthetic dev credentials from seed_demo.py.")
     except ConfigError as error:
         print(error, file=sys.stderr)
         return 1
@@ -127,7 +143,14 @@ def main() -> int:
     print(f"Stage: {args.stage.upper()}")
     print("PostgreSQL and Sentry DSNs: validated")
     print("Slack and Google Maps: credential headers prepared")
-    print("No connections opened or credentials logged.")
+    if args.demo_masking:
+        # Simulate debug prints left behind while checking integrations.
+        print(f"DEBUG stdout: Slack token={config['SLACK_BOT_TOKEN']}", flush=True)
+        print(f"DEBUG stderr: Slack token={config['SLACK_BOT_TOKEN']}", file=sys.stderr)
+        print(f"Database DSN: {config['DATABASE_DSN']}")
+    else:
+        print("No connections opened or credentials logged.")
+
     return 0
 
 

@@ -55,6 +55,13 @@ APP_ENV=dev op run --env-file=.env.example -- python3 app.py --stage dev
 passes them as environment variables. The template stays a reference file.
 [1Password CLI environment variables](https://www.1password.dev/cli/secrets-environment-variables)
 
+With the synthetic dev item, you can also try the
+[console masking example](../README.md#see-console-masking-in-action).
+
+```sh
+APP_ENV=dev op run --env-file=.env.example -- python3 app.py --stage dev --demo-masking
+```
+
 ### JSON template
 
 ```sh
